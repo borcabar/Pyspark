@@ -1,0 +1,34 @@
+Pyspark_boris
+
+# this is the path to the db i'll use to prove pyspark
+/Users/borisca/Desktop/MBD.comillas/ML1/DB/LabPractice_1_Datasets/titanic.csv
+
+#to call a funciton your use
+name = spark.sparkContext.textFile('<path>')
+
+#so...
+titanic=spark.sparkContext.textFile('/Users/borisca/Desktop/MBD.comillas/ML1/DB/LabPractice_1_Datasets/titanic.csv')
+
+
+
+#make a map to know the  probability of every name in the passengers list
+#this is a typical line
+#"4","Allison, Mrs Hudson JC (Bessie Waldo Daniels)","1st",25,"female",0,1
+# so... shal i to choose the second string after the ','
+tit_names=titanic.map(lambda x: re.split(',',x)).map(lambda x: x[2]).map(lambda x: re.split(' ',x)).map(lambda x: x[1]).map(lambda x: (x,1)).reduceByKey(lambda a,b:a+b)
+
+tit_names1=titanic.map(lambda x: re.split(',',x)).map(lambda x: x[2])
+
+tit_names2=tit_names1.map(lambda x: re.split(' ',x)).map(lambda x: x[1])
+
+tit_names2=tit_names1.map(lambda x: x[2])
+tit_names1.take(3)
+
+
+tit_names2=tit_names.map(lambda x: re.split(',',x)).map(lambda x: x[2]).map(lambda x: re.split(' ',x)).map(lambda x: x[1]).map(lambda x: (x,1)).reduceByKey(lambda a,b:a+b)
+
+tit_names=titanic.map(lambda x: re.split(',',x)).map(lambda x: x[2]).map(lambda x: re.split(' ',x)).map(lambda x: x[1]).map(lambda x: (x,1)).reduceByKey(lambda a,b:a+b)
+
+tit_names=titanic.map(lambda x: re.split(',',x)).map(lambda x: x[2]).map(lambda x: re.split(' ',x)).map(lambda x: x[1]).map(lambda x: (x,1)).reduceByKey(lambda a,b:a+b)
+
+

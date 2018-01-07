@@ -1,0 +1,15 @@
+pyspark
+
+# se accede desde la webpage
+http://192.168.80.33:8000
+
+#se valida con mi usuarion, y mi password
+
+#funcion map
+#toma una linea, le aplica la función y saca la line; si se alimenta con n lineas, salen n 
+#lineas, qu epueden ser listas
+
+#función flatMap
+#toma las lineas, y als divide en su componentes volviendolos elementos individuales,
+# si se aplica sobre 20 lineas, cada una con 5 lementos, la salida serán 100 objetos
+
