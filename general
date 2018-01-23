@@ -2,3 +2,5 @@
 Works done in Pyspark
 to access pyspark you shall to put in the browser 192.168.80.33:8000
 
+It's used the spark-ml library, and the pipeline... wothfull concept.
+
