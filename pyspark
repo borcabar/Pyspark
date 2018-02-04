@@ -13,3 +13,341 @@ http://192.168.80.33:8000
 #toma las lineas, y als divide en su componentes volviendolos elementos individuales,
 # si se aplica sobre 20 lineas, cada una con 5 lementos, la salida serán 100 objetos
 
+# PYSPARK TUTORIAL
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#++++++++++++++++++++++     BEGINNING      ++++++++++++++++++++++++++
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+import os
+import pandas as pd
+
+from pyspark import SparkConf
+from pyspark.sql import SparkSession
+from pyspark.sql import Row
+
+import pyspark.sql.functions as F
+import pyspark.sql.types as T
+#importing the function, and whole libraries to run on our sparkcontet
+
+
+spark = (
+
+    SparkSession.builder
+    .config(conf=conf)
+    .enableHiveSupport()
+    .getOrCreate()
+
+)
+#this allows me to work in sql databases, or somethinbg like that
+
+
+
+SparkContext() #don't appear in the program directly
+# It's the way to reach the cluster, by means of a yarn application or a spark cluster... anyway it needs the SparConf() to work
+
+
+conf = (
+
+    SparkConf()
+    .setAppName(u"Name of the application")
+    .set("spark.jars","/var/lib/sqoop/mysql-connector-java-5.1.44-bin.jar")
+
+)
+# Set several aprameters needed to run the spark session, including some ot them fundamentals for the SparContext
+
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#++++++++++++++++++++++       Logic        ++++++++++++++++++++++++++
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+object.function1.function2(argument)
+object.function1(argument1).function2(argument2)
+# over the object it's applied the function1, over the result of such it's applied the functions2
+
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#++++++++++++++++++++++        RDD         ++++++++++++++++++++++++++
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+#It's the native basic abstraction in spark, allows multiple information storage (Resilient Distributed Dataset)
+#There are two types of afunctions over the RDD, the transformations (stay in the cloud till an actions ask the transformtion) and the actions (require the system to solve s.t.)
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Managing the file
+
+type(rdd_name)
+#tells if the element it's a RDD or a dataframe, or whatever
+
+rdd_name = spark.sparkContext.textFile('path')
+#the way to upload an RDD
+
+rdd_name = spark.sparkContext.parallelize(numpy_object, 10)
+#way to transform a numpy_object into an rdd, not sure the meaning of the 10
+
+rdd_name.take(3)
+#shows the first 3 elements
+
+name_DF = rdd_name.toDF()
+# transforma a RDD to a DF
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Functions
+
+
+rdd_name.count()
+#coiunt the amount of elements
+
+rdd_name.take(8)
+# shows the first 8 elements of the rdd
+
+
+
+rdd_name2 = (
+    rdd_name
+    .map(lambda "something")
+    .reduceByKey(lambda "something")
+).collect()
+#fundamental way to deal with rdd, by map and reduce
+
+
+
+
+
+
+
+
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#+++++++++++++++++++++++++  DATAFRAME      ++++++++++++++++++++++++++
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+#Are more strutured that RDD, adn therefore faster, it's the choice when possible
+
+
+
+
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Managing the file
+
+type(df_name)
+# says the type of the element
+
+
+df_name = spark.read.text('path')
+df_name = spark.read.text('path.csv')
+df_name = (
+    spark.read
+    .options(header=True, inferSchema=True)
+    .csv('path.csv')
+df_name = spark.read.json('path.json')
+# the enter point to DF is the spark itself... the sql library. I thing that intead of ".text" 
+# you can write the specific type of file "parquet", "csv"
+#important to inferSchema
+
+
+
+df_name = (
+    spark.read
+    .format("com.mongodb.spark.sql.DefaultSource")
+    .option("uri","mongodb://edge01.bigdata.alumnos.upcont.es/path")
+    .load()
+)
+#also, we can upload from mongodb
+
+
+
+df_name1 = (
+    spark.read
+    .options(header=True)
+    .schema(esquema)
+    .csv('path')
+).cache()
+
+df_name.printSchema()
+#Says the field of the dataframe, names  and structure
+
+rdd_name = df_name.rdd.map(lambda p: something).collect()
+#this way transform a DF into a RDD, just with the funtion ".rdd"
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Functions
+
+
+
+df_name2 =  df_name.filter('var1 between 13 and 19').select('var2')
+#filter, and select
+# this works like sql commands... after all the DF came from the SQL library
+
+
+df_name.show()
+#by defect shows the first 20 values
+
+
+.select()
+#allows to create columns, and lots of interesting stuff
+
+
+ df_name.select('colum1',
+     F.mean('column1').alias("media"),
+     F.min('column1').alias("minimo"),
+     F.max('column2').alias("maximo")
+ ).show()
+#calculate several statistical functions of the given column, given it a name by means of alias, or let it alone 'column1'
+
+df_name.stat.cov('column1', 'column2')
+# calculate the covariance between column1 and column2, could calculate too the correlation ".corr"
+
+df_name1.groupBy("column1").agg(F.count("*").alias("new_column_name")).show()
+df_name2 = (
+
+    df_name1
+    .groupBy("column1")
+    .agg(
+        F.count("*").alias("new_column_name1"),
+        F.sum('column2').alias("new_column_name2"),
+        F.sum('column3').alias("new_column_name3"),
+        F.collect_set('column4').alias('new_column_name4')
+    )
+
+)
+#you can aggregate stuff in every possble way... collect_set, put all the string associated with the groupBy
+
+
+#+++++++++++++  import pyspark.sql.functions as F +++++++++++++++++++
+
+#it's pleanty of functions
+
+F.sqrt
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Joining DF
+
+(
+    df_name
+    .join(df_name2,'common_column',XXX)
+).show()
+#joins df_name1 with df_name2 by the common_column, as XXX (XXX= "" -> inner join; XXX= "left", XXX="full")
+
+(
+df_name1
+    .crossJoin(df_name2)
+).show()
+#it makes all possible combinations
+
+#the joins could be as complex as you cna imaging, se notebook 03
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Creating and manipulating a DF
+
+df_name = spark.range(initial_value, final_value)
+#create a column called "id" by default, of the specified size
+
+df_name=df_name.select(id, F.random(seed=some_value).alias(name_of_the_column1),F.random(seed=some_value).alias(name_of:_the_column2))
+#by this procedure you can make new columns called "name_of_the_column1" of random values, depends upon the library F
+
+.withColumn(df_name,new_column_name,column_expression)
+#appends new columns
+
+df.describe().show()
+# shows the descriptive statistics of the nuemris columns, you can choose those colums naming inside: describe("column1","column2")
+
+df_name = spark.createDataFrame([array])
+# transform an array into a RDD
+
+df_name = spark.createDataFrame([
+    ("Rafferty", 31),
+    ("Jones", 33),
+    ("Heisenberg", 33),
+    ("Robinson", 34),
+    ("Smith", 34),
+    ("Williams", None)
+],schema=["LastName", "DepartmentID"])
+# could be created the DF, putting the columns_names by schema
+
+df_name.limit(5).toPandas()
+#using pandas to see a beautiful table
+
+
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#++++++++++++++++++++++   Spark functions  ++++++++++++++++++++++++++
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Transformation
+
+# functions and operations that are not inmedaity applied, they're left undone till 
+# the moment a collpasing functions requieres to
+
+.map(function)
+# apply the function mentioned inside to every "Dios" of the DF
+
+.reduce()
+
+.reduceByKey()
+ 
+.join()
+
+.cogroup()
+
+.randomSplit()
+
+
+
+.collect()
+
+
+
+
+
+
+
+
+
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#+++++++++++++++++++++++++    HIVE         ++++++++++++++++++++++++++
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+# to work over hive you use spark.catalog
+
+
+
+spark.catalog.currentDatabase()
+#say the current DDBB
+
+
+
+
+
+
+
+
+
+
+
