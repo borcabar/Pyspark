@@ -56,3 +56,7 @@ model = DecisionTree.trainClassifier(trainingData, numClasses=2, categoricalFeat
 
     algo: The algorithm or task (classification vs. regression) is set using the tree [Strategy] parameter.
 
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# For gradient_boosting i find in the docuemntation
+
+maxIter=10
