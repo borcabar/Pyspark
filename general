@@ -9,3 +9,50 @@ The final aim is always to let it be as a bash. instruction in the shell
 ##   Machine Learning - Gradient_Boostrap   +++++++++++++++++++++++++++++++++++++++
 
 In order to put into work the cross-vlidation it is necessary to frame a grid, where variablesz of the system could change
+
+For this we shall know the parameters that allow tunning a gbr (gradient boosting regression). 
+
+I found this tunning options for gradient_boosting
+
+boostingStrategy.numIterations = 2 // We can use more iterations in practice.
+boostingStrategy.treeStrategy.numClasses = 2
+boostingStrategy.treeStrategy.maxDepth = 2
+boostingStrategy.treeStrategy.maxBins = 32
+boostingStrategy.treeStrategy.subsamplingRate = 0.5
+boostingStrategy.treeStrategy.maxMemoryInMB =1024
+boostingStrategy.learningRate = 0.1
+
+
+Éste es un GRID (lo que busco) para random forrest
+## CREATE PARAMETER GRID
+grid = [{'maxDepth': [5,10], 'numTrees': [25,50]}]
+paramGrid = list(ParameterGrid(grid))
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#   Tunable parameters for desicion tree
+
+These parameters may be tuned. Be careful to validate on held-out test data when tuning in order to avoid overfitting.
+
+maxBins: could be 32, the more the better, but the most time consuming
+
+maxMemoryInMB: by default 256MB, if bigger could be better.
+
+subsamplingRate: Fraction of the training data used for learning the decision tree. This parameter is most relevant for training 
+ensembles of trees (using RandomForest and GradientBoostedTrees), where it can be useful to subsample the original data. 
+
+impurity: Impurity measure (discussed above) used to choose between candidate splits. This measure must match the algo parameter.
+
+model = DecisionTree.trainClassifier(trainingData, numClasses=2, categoricalFeaturesInfo={},
+                                     impurity='gini', maxDepth=5, maxBins=32)
+                                     
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Tunable parameters for gradient_boosting
+
+    loss: See the section above for information on losses and their applicability to tasks (classification vs. regression). Different losses can give significantly different results, depending on the dataset.
+
+    numIterations: This sets the number of trees in the ensemble. Each iteration produces one tree. Increasing this number makes the model more expressive, improving training data accuracy. However, test-time accuracy may suffer if this is too large.
+
+    learningRate: This parameter should not need to be tuned. If the algorithm behavior seems unstable, decreasing this value may improve stability.
+
+    algo: The algorithm or task (classification vs. regression) is set using the tree [Strategy] parameter.
+
