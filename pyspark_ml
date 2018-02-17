@@ -1,0 +1,698 @@
+
+# coding: utf-8
+
+# # Practica Pyspark - Boris Cabrera
+
+# 
+# Enunciado
+# 
+#     Leer ambos ficheros a Spark DataFrame y hacer las transformaciones necesarias para conseguir los siguientes esquemas:
+# 
+# root
+#  |-- id_contenido: integer (nullable = true)
+#  |-- co_cadena: integer (nullable = true)
+#  |-- it_inicio_titulo: string (nullable = true)
+#  |-- it_fin_titulo: string (nullable = true)
+#  |-- it_inicio_visionado: string (nullable = true)
+#  |-- it_fin_visionado: string (nullable = true)
+# 
+#  root
+#  |-- id_contenido: integer (nullable = true)
+#  |-- genero: string (nullable = true)
+#  |-- subgenero: string (nullable = true)
+#  |-- tipo_contenido: string (nullable = true)
+# 
+#     ¿Cuántos registros tiene cada DF? ¿Cuántos contenidos (id_contenido) únicos tiene cada uno? ¿Cuántas cadenas (co_cadena) hay en el primer DF?
+# 
+#     En el primer dataset las columnas que marcan momentos (las variables que empiezan por it) están definidas como string, convertirlas a formato timestamp, consiguiendo:
+# 
+#  root
+#  |-- id_contenido: integer (nullable = true)
+#  |-- co_cadena: integer (nullable = true)
+#  |-- it_inicio_titulo: timestamp (nullable = true)
+#  |-- it_fin_titulo: timestamp (nullable = true)
+#  |-- it_inicio_visionado: timestamp (nullable = true)
+#  |-- it_fin_visionado: timestamp (nullable = true)
+# 
+#     Calcular ahora la duración en minutos de cada programa usando it_inicio_titulo y it_fin_titulo, una vez calculado descartar del dataset todas los registros donde la duración sea menor que un minuto.
+# 
+#     ¿Cúal es la duración media de los contenidos?
+# 
+#     Filtrar ahora todos los registros donde el inicio de visionado sea después del fin de visionado ya que se entienden que estos registros son erróneos.
+# 
+#     Calcular la duración de cada visualización en minutos.
+# 
+#     Para cada contenido, cadena e inicio del título agregar (sumar) todos los minutos vistos.
+# 
+#     Guardar el nuevo DF con la información agregada en el esquema personal de hive con el nombre practica_audiencias_agregado (activar el modo overwrite).
+# 
+#     Usando el DF con información extra de los contenidos, conseguir/pegar en cada registro del DF agregado los campos: genero, subgenero y tipo_contenido usando para ello el campo en común id_contenido.
+# 
+#     Construir ahora las siguientes columnas sobre el nuevo DF:
+#         id_weekday: Día de la semana (en literal) del inicio del programa.
+#         id_month: Mes (en literal) del inicio del programa.
+#         id_inicio: Hora del inicio del programa.
+# 
+#     Seleccionar las columnas necesarias para conseguir el siguiente esquema:
+# 
+#     root
+#     |-- id_contenido: integer (nullable = true)
+#     |-- minutos: double (nullable = true)
+#     |-- co_cadena: integer (nullable = true)
+#     |-- genero: string (nullable = true)
+#     |-- subgenero: string (nullable = true)
+#     |-- tipo_contenido: string (nullable = true)
+#     |-- id_weekday: string (nullable = true)
+#     |-- id_month: string (nullable = true)
+#     |-- id_inicio: string (nullable = true)
+# 
+#     TIP: Puede ser útil F.date_format
+# 
+# El DF resultante de todas estas transformaciones tiene que ser parecido a:
+# 
+# +------------+------------------+---------+------+---------+--------------+----------+--------+---------+
+# |id_contenido|           minutos|co_cadena|genero|subgenero|tipo_contenido|id_weekday|id_month|id_inicio|
+# +------------+------------------+---------+------+---------+--------------+----------+--------+---------+
+# |         304|2216.3833333333337|       14|    IF|       IF|         SERIE|    Monday| January|       06|
+# |        1350|311.96666666666664|       18|    EN|       MG|         SERIE|    Monday| January|       17|
+# |       19996|             53.45|      108|    SR|       PO|        EPISOD|   Tuesday| January|       01|
+# |        1942|             258.7|      144|    IN|       DA|        EPISOD|    Monday| January|       20|
+# +------------+------------------+---------+------+---------+--------------+----------+--------+---------+
+# only showing top 4 rows
+# 
+# Con el DF generado hasta ahora, vamos a entrenar un modelo de Machine Learning, queremos explicar los minutos visualizados en función del resto de variables es decir:
+# 
+#  
+# minutos∼co_cadena+genero+subgenero+tipo_contenido+id_weekday+id_month+id_inicio
+# 
+#  
+# 
+# (NOTA: No se usará la variable id_contenido)
+# 
+# Para ello:
+# 
+#     Usando StringIndexer codificar cada una de las columnas en númerica.
+#     Usar OneHotEncoder en cada columna para generar las variables binarias.
+#     Usar VectorAssembler para conseguir un vector de features con todas las variables binarias.
+#     ¿Qué tamaño tiene este vector de features?
+#     Encapsular todas las transformaciones de ML anteriores en una pipeline de Spark ML.
+#     Dividir xtrain en 80% Train y 20% Test.
+#     Entrenar un árbol de regresión para predecir la variable minutos.
+#     Evaluar el modelo resultante usando RMSE y la muestra de test.
+# 
+# OPCIONAL:
+# 
+#     Entrenar también un modelo de Gradient_boosting (implementado en Spark en el objeto GBTRegressor).
+#     Usar validación cruzada sobre la muestra de entrenamiento para tunear los hiperparámetros convenientes hasta conseguir el mejor resultado que seamos capaces.
+# 
+
+# In[2]:
+
+import os
+import pandas as pd
+import numpy as np
+
+from pyspark import SparkConf
+from pyspark.sql import SparkSession
+from pyspark.sql import Row
+from pyspark.serializers import CloudPickleSerializer
+from pyspark.sql.functions import col
+
+import pyspark.sql.functions as F
+import pyspark.sql.types as T
+
+from pyspark.sql.window import Window
+from pyspark.sql.types import IntegerType
+
+from pyspark.sql.functions import to_timestamp, datediff, to_date, lit
+
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
+from pyspark.ml.regression import DecisionTreeRegressor, GBTRegressor
+from pyspark.ml.feature import VectorIndexer
+from pyspark.ml.evaluation import RegressionEvaluator
+from pyspark.ml.linalg import Vectors
+from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
+from pyspark.ml.classification import LogisticRegression
+
+
+
+
+# In[3]:
+
+conf = (
+
+    SparkConf()
+    .setAppName(u"Practica final pyspark")
+    .set("spark.executor.memory","4g")
+    .set("spark.executor.cores","2")
+
+)
+
+
+# In[4]:
+
+spark = (
+
+    SparkSession.builder
+    .config(conf=conf)
+    .enableHiveSupport()
+    .getOrCreate()
+
+)
+
+
+# # Punto 1: primer esquema
+
+# In[5]:
+
+print("Se descargan los archivos. Se muestran sus esqueman tal como se piden en la práctica")
+print("Esquema de muestra de audiencias:")
+
+
+# In[6]:
+
+audi = (spark.read
+    .options(header=True, inferSchema=True)
+    .load('/datos/practica_spark/muestra_audiencias.parquet')).cache()
+
+
+# In[7]:
+
+audi.printSchema()
+
+
+# In[8]:
+
+print("Esquema de información de contenidos:")
+
+
+# In[9]:
+
+cont = (spark.read
+    .options(header=False, inferSchema=True)
+    .csv('/datos/practica_spark/info_contenidos.csv')).cache()
+
+
+# In[10]:
+
+cont2=cont.selectExpr("_c0 as id_cont", "_c1 as genero",
+                      "_c2 as subgenero", "_c3 as tipo_contenido")
+
+
+# In[11]:
+
+cont3 = cont2.withColumn("id_contenido",cont2["id_cont"].cast("int")).drop("id_cont")
+
+
+# In[12]:
+
+cont4=cont3.select( "id_contenido", "genero","subgenero", "tipo_contenido")
+
+
+# In[13]:
+
+cont4.printSchema()
+
+
+# # Punto 2: conteo
+
+# In[14]:
+
+print("La contidad de audiencias es %s" % audi.count())
+
+
+# In[15]:
+
+print("La cantidad de contenido es %s " % cont4.count())
+
+
+# In[16]:
+
+print("La cantidad de id_contenido únicos en contenido es: %s " % (cont4.groupBy("id_contenido").count()).count())
+
+
+# In[17]:
+
+print("La cantidad de id_contenido únicos en audiencias es: %s " % (audi.groupBy("id_contenido").count()).count())
+
+
+# In[18]:
+
+print("El número de cadenas en audiencias es: %s " % (audi.groupBy("co_cadena").count()).count())
+
+
+# # Punto 3: convertir a timestamp
+
+# In[19]:
+
+audi2=audi.selectExpr("id_contenido","co_cadena","it_inicio_titulo as ini_tit", "it_fin_titulo as fin_tit",
+                      "it_inicio_visionado as ini_vi", "it_fin_visionado as fin_vi")
+
+
+# In[20]:
+
+audi3 = (audi2
+         .withColumn("it_inicio_titulo",to_timestamp("ini_tit")).drop("ini_tit")
+         .withColumn("it_fin_titulo",to_timestamp("fin_tit")).drop("fin_tit")
+         .withColumn("it_inicio_visionado",to_timestamp("ini_vi")).drop("ini_vi")
+         .withColumn("it_fin_visionado",to_timestamp("fin_vi")).drop("fin_vi")
+        )
+        
+
+
+# # Punto 4: cálculo duración y visualización
+
+# In[21]:
+
+audi4 =(audi3
+    .withColumn("duracion_titulo",(F.minute("it_fin_titulo")-F.minute("it_inicio_titulo")))
+    .withColumn("duracion_visionado",(F.minute("it_fin_visionado")-F.minute("it_inicio_visionado")))
+    )
+
+
+# In[22]:
+
+#estos resultados son 6.5 millones menos de los originales, parece que funciona
+audi5 = audi4.filter(audi4.duracion_titulo>=1)
+
+
+# In[23]:
+
+media_cont=audi5.agg(F.mean("duracion_titulo")).collect()
+
+
+# In[24]:
+
+me=audi5.describe('duracion_titulo').collect()[1][1]
+
+
+# In[25]:
+
+print("La duración media de los contenidos es %s minutos" % round(media_cont[0][0],3))
+
+
+# In[26]:
+
+#éste filtro rechaza las ocasiones donde el inicio del visionado va después del final
+audi6 = audi5.filter(audi5.duracion_visionado>0)
+
+
+# In[27]:
+
+# con ésto se calcula cuantos minutos han sido vistos en cada programa 
+# a una hora determianda por todos los ususarios
+
+audi7=(
+    audi6
+    .groupBy("id_contenido","co_cadena","it_inicio_titulo")
+    .agg(F.sum(audi6.duracion_visionado).alias("minutos"))
+)
+
+
+# In[28]:
+
+audi7.show(5)
+
+
+# # Pregunta 5: Hive y disgregar Fecha y Hora
+
+# In[29]:
+
+spark.catalog.setCurrentDatabase('bcabrera')
+
+
+# In[30]:
+
+audi7.write.mode('overwrite').saveAsTable('bcabrera.practica_audicencias_agregado')
+
+
+# In[31]:
+
+aucont=audi7.join(cont4,'id_contenido','left')
+
+
+# In[32]:
+
+aucont2=(aucont
+         .withColumn('id_weekday',F.date_format(aucont.it_inicio_titulo,'EEEE'))
+         .withColumn('id_month_num',F.date_format(aucont.it_inicio_titulo,'MMMM'))
+         .withColumn('id_inicio',F.date_format(aucont.it_inicio_titulo,'HH')).drop('it_inicio_titulo')
+        )
+
+
+# NOTA: de la hora de inicio, como luego se simplificará con StringIndexer, me parece más 
+#     lógico limitarlo solo a la hora de inicio,c on minutos se distribuyen demasiado los valores.
+
+# In[33]:
+
+aucont2.printSchema()
+
+
+# In[34]:
+
+aucont2.show(4)
+
+
+# In[35]:
+
+aucont3=aucont2.drop("id_contenido")
+
+
+# In[36]:
+
+aucont3.show(4)
+
+
+# # Pregunta 6: Modelo Machine Learning
+
+# In[58]:
+
+trainDF, testDF = (
+
+    aucont3
+    .drop('id_contenido')
+    .randomSplit([0.8, 0.2], seed=1234)
+
+)
+trainDF.cache()
+testDF.cache()
+print("## Número de registros en `trainDF`: {}".format(trainDF.count()))
+print("## Número de registros en `testDF`: {}".format(testDF.count()))
+
+
+# In[59]:
+
+# print(DecisionTreeRegressor().explainParams())
+
+
+# 
+# 
+# Me llama la atención que se ignore el "id_contenido", seguramente sea el mejor predictor 
+# de la cantidad de tiempo visto; supongo que ignorarlo hace más interesante el ejercicio 
+# desde un punto de vista académico
+# 
+# 
+
+# In[60]:
+
+indexers = [StringIndexer(inputCol=column, outputCol=column+"_index") for column in list(set(trainDF.columns)-set(['minutos'])) ]
+
+
+# StringIndexer: trnasform values that could be undertood as factors to numbers... in
+#     order to make them easy to process. This is important for several funcitons
+
+# In[61]:
+
+list2=['id_inicio_index',
+ 'genero_index',
+ 'tipo_contenido_index',
+ 'subgenero_index',
+ 'id_weekday_index',
+ 'id_month_num_index',
+ 'co_cadena_index']
+
+#lista fabricada para que OneHotEncoder pueda procesar las columnas correctamente
+
+
+# In[62]:
+
+encoder = [OneHotEncoder(inputCol=column, outputCol=column+"_enco") for column in list2 ]
+
+
+
+# OneHotEncoder: transform a value as number (processed by StringIndexer) to a binary vector. 
+
+# In[63]:
+
+list3=['id_inicio_index_enco',
+ 'genero_index_enco',
+ 'tipo_contenido_index_enco',
+ 'subgenero_index_enco',
+ 'id_weekday_index_enco',
+ 'id_month_num_index_enco',
+ 'co_cadena_index_enco']
+
+#lista fabricada para que VectorAssembler pueda procesar correctamente
+
+
+# In[64]:
+
+vecassem = VectorAssembler(inputCols=list3, outputCol="features")
+
+
+# La función VectorAssembler transforma los valores que ya hemos procesado a un vector
+
+# In[65]:
+
+detree = DecisionTreeRegressor(labelCol="minutos", featuresCol="features")
+
+
+# In[66]:
+
+print("Se hace el modelo del Arbol de decisión")
+
+
+# In[67]:
+
+
+pipeline = Pipeline(stages=indexers + encoder + [vecassem, detree])
+df_r = pipeline.fit(trainDF).transform(trainDF)
+
+df_r.show(5)
+
+
+# In[68]:
+
+# df_res=df_r.select('minutos','prediction')
+# df_res.show(50)
+
+
+# In[69]:
+
+df_fea=df_r.select('features')
+
+
+# In[70]:
+
+df_fea.show(3)
+
+
+# In[71]:
+
+print('El vector features tiene 275 elementos')
+
+
+# In[72]:
+
+# df_res=df_r.select('minutos','prediction')
+
+# df_res=df_r.select('minutos','prediction')
+# df_res.show(50)
+
+
+# In[73]:
+
+type(pipeline)
+
+
+# In[74]:
+
+p_model=pipeline.fit(trainDF)
+
+
+# In[75]:
+
+# Make predictions.
+results = p_model.transform(testDF)
+
+
+# In[76]:
+
+# Select example rows to display.
+results.select("prediction", "minutos").show(10)
+
+# wonder if it works because of the name of the argiuments.... they depends
+# upon de function or the dataset
+# all in all solved, 
+
+
+# In[77]:
+
+# Select (prediction, true label) and compute test error
+evaluator = RegressionEvaluator(
+    labelCol="minutos", predictionCol="prediction", metricName="rmse")
+rmse = evaluator.evaluate(results)
+print("El resultado del modelo de Arbol de Decision en RMSE para el conjunto de validación es: %g" % rmse)
+
+#Tengo dudas si "prediction" es un valor de la función, en cuyo caso no me importa
+# o de los resultados, en cuyo caso me afecta todo
+
+
+# # Hago de nuevo el Arbol de Decisión, pero con profundidad máxima 25
+
+# In[ ]:
+
+prof=25
+
+print("Se hace el modelo de Arbol de Decisión con profundidad %g" % prof)
+
+detree2 = DecisionTreeRegressor(labelCol="minutos", featuresCol="features",maxDepth=prof)
+
+
+# In[ ]:
+
+pipeline3 = Pipeline(stages=indexers + encoder + [vecassem, detree2])
+
+p3_model=pipeline3.fit(trainDF)
+
+# Make predictions.
+results3 = p3_model.transform(testDF)
+
+# Select example rows to display.
+results3.select("prediction", "minutos").show(10)
+
+# wonder if it works because of the name of the argiuments.... they depends
+# upon de function or the dataset
+# all in all solved, 
+
+# Select (prediction, true label) and compute test error
+evaluator = RegressionEvaluator(
+    labelCol="minutos", predictionCol="prediction", metricName="rmse")
+rmse = evaluator.evaluate(results3)
+print("El resultado del RMSE para un arbol de decision para el conjunto de validación es: %g" % rmse)
+
+#Tengo dudas si "prediction" es un valor de la función, en cuyo caso no me importa
+# o de los resultados, en cuyo caso me afecta todo
+
+
+# # Ahora, la parte de gbt
+
+# In[ ]:
+
+print("Se hace el modelo de Arbol de Gradient_Boosting")
+
+
+# In[78]:
+
+gbt = GBTRegressor(labelCol="minutos", featuresCol="features")
+
+
+pipeline2 = Pipeline(stages=indexers + encoder + [vecassem, gbt])
+
+
+# In[79]:
+
+p2_model=pipeline2.fit(trainDF)
+
+
+# In[80]:
+
+# Make predictions.
+results2 = p2_model.transform(testDF)
+
+# Select example rows to display.
+results2.select("prediction", "minutos").show(10)
+
+# wonder if it works because of the name of the argiuments.... they depends
+# upon de function or the dataset
+# all in all solved, 
+
+# Select (prediction, true label) and compute test error
+evaluator = RegressionEvaluator(
+    labelCol="minutos", predictionCol="prediction", metricName="rmse")
+rmse = evaluator.evaluate(results2)
+print("El resultado del RMSE para Gradient_boosting para el conjunto de validación es: %g" % rmse)
+
+#Tengo dudas si "prediction" es un valor de la función, en cuyo caso no me importa
+# o de los resultados, en cuyo caso me afecta todo
+
+
+# # Elección de parametros de tunning
+# 
+# Según el libro: "An intro to statistical learning" de James et al. pag. 322, un Arbol de decisión tipo boosting solo tiene tres parametros de tunning, y pongo al lado el parametro de Gradient_boosting que considero equivalente:
+# - El número de arboles -> maxIter (default=20)
+# - el parametro de shrinkage Lambda  ->  No lo veo
+# - la cantidad de separaciones en cada arbol -> .maxDepth (default=5)
+# 
+# Por otro lado, para el gradiente se puede implementar el tamaño del paso,
+# - Step size -> stepSize (default=0.1)
+
+# In[87]:
+
+paramGrid = (
+
+    ParamGridBuilder()
+    .addGrid(GBTRegressor.maxIter, [10,20]) # [10,20]
+    .addGrid(GBTRegressor.stepSize, [0.1,0.3]) # [0.1,0.3]
+    .addGrid(GBTRegressor.maxDepth, [2,4]) # [2,4,6]
+    .build()
+
+)
+
+
+# In[88]:
+
+crossval = CrossValidator(
+
+    estimator = pipeline2,
+    estimatorParamMaps = paramGrid,
+    evaluator = evaluator,
+    numFolds = 2
+
+)
+
+
+# In[89]:
+
+cvModel = crossval.fit(trainDF)
+
+cvModel.avgMetrics
+
+mejor = np.argsort(cvModel.avgMetrics)[0]
+
+mejor
+
+
+# In[90]:
+
+cvModel.avgMetrics[mejor]
+
+cvModel.getEstimatorParamMaps()[mejor]
+
+rmse_train = evaluator.evaluate(cvModel.transform(trainDF))
+rmse_valid = evaluator.evaluate(cvModel.transform(testDF))
+
+
+# In[93]:
+
+print("Los resultados para cross-validation en Gradient_boosting son:")
+print("RMSE (Train): {:.3f}".format(rmse_train))
+print("RMSE (Valid): {:.3f}".format(rmse_valid))
+
+
+# In[57]:
+
+# print(GBTRegressor().explainParams())
+# subsamplingRate
+
+
+# In[94]:
+
+print("####   ###   ##  #")
+print("#       #    # # #")
+print("###     #    # # #")
+print("#       #    #  ##")
+print("#      ###   #   #")
+
+
+# export PATH=/opt/cloudera/parcels/Anaconda/bin:$PATH pyspark 
+# 
+# jupyter nbconvert --to python notebookR/practica_ml_v2.ipynb 
+# 
+# spark2-submit notebookR/practica_ml_v2.py 2>log.txt
+
+# In[63]:
+
+spark.stop()
+
