@@ -1,0 +1,4 @@
+The language propossed to work with Spark is Python, is deemed to be friendlyer than Scala (language where Spark is written) 
+and more complete that the R option (that lacks several useful features), soo, we worked in Python.
+
+If i keep working in Spark this shall grow.
